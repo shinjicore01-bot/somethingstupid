@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Proposal Puzzle</title>
+    <title>Proposal Jigsaw Puzzle</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -22,22 +22,28 @@
         #puzzle-container {
             display: inline-block;
             position: relative;
-            width: 400px;
-            height: 400px;
+            width: 300px;
+            height: 300px;
             border: 2px solid #d63384;
             margin: 20px auto;
+            background-color: #fff;
         }
         .puzzle-piece {
             position: absolute;
             width: 100px;
             height: 100px;
-            background-size: 400px 400px;
-            cursor: pointer;
+            background-size: 300px 300px;
+            cursor: grab;
+            border: 1px solid #ccc;
             transition: all 0.2s;
-            user-select: none; /* Prevent text selection on mobile */
+            user-select: none;
         }
         .puzzle-piece:hover {
             opacity: 0.8;
+        }
+        .puzzle-piece.dragging {
+            opacity: 0.5;
+            z-index: 10;
         }
         #message {
             display: none;
@@ -63,8 +69,8 @@
         /* Mobile responsiveness */
         @media (max-width: 600px) {
             #puzzle-container {
-                width: 300px;
-                height: 300px;
+                width: 225px;
+                height: 225px;
             }
             .puzzle-piece {
                 width: 75px;
@@ -81,12 +87,12 @@
 </head>
 <body>
     <h1>Will You Solve This Puzzle for a Special Message?</h1>
-    <p>Tap on a tile next to the empty space to move it. Solve the puzzle to reveal the proposal!</p>
+    <p>Drag the pieces to their correct positions to complete the puzzle and reveal the proposal!</p>
     <div id="puzzle-container"></div>
     <button id="shuffle-btn">Shuffle Puzzle</button>
     <div id="message">Will you be my forever valentine, Bean?</div>
     <audio id="audio" controls loop>
-        <!-- Replace 'your-song.mp3' with the path to your song file. For example, use a public domain song or upload your own. -->
+        <!-- Replace 'your-song.mp3' with the path to your song file. -->
         <source src="your-song.mp3" type="audio/mpeg">
         Your browser does not support the audio element.
     </audio>
@@ -98,23 +104,23 @@
         const shuffleBtn = document.getElementById('shuffle-btn');
 
         // Replace 'your-image.jpg' with the path to your provided picture.
-        const imageSrc = 'your-image.jpg'; // e.g., 'path/to/your/photo.jpg'
+        const imageSrc = 'your-image.jpg'; // Ensure the image is 300x300 or square for best fit.
 
-        const gridSize = 4; // 4x4 grid
+        const gridSize = 3; // 3x3 grid for easier solving
         let pieceSize = 100; // Will be adjusted for mobile
         let pieces = [];
-        let emptyPos = { x: 3, y: 3 }; // Bottom-right empty
+        let correctPositions = [];
 
         // Adjust for mobile
         function adjustForMobile() {
             if (window.innerWidth <= 600) {
                 pieceSize = 75;
-                container.style.width = '300px';
-                container.style.height = '300px';
+                container.style.width = '225px';
+                container.style.height = '225px';
             } else {
                 pieceSize = 100;
-                container.style.width = '400px';
-                container.style.height = '400px';
+                container.style.width = '300px';
+                container.style.height = '300px';
             }
         }
 
@@ -123,26 +129,29 @@
             adjustForMobile();
             container.innerHTML = '';
             pieces = [];
-            for (let i = 0; i < gridSize * gridSize - 1; i++) {
+            correctPositions = [];
+            for (let i = 0; i < gridSize * gridSize; i++) {
                 const piece = document.createElement('div');
                 piece.className = 'puzzle-piece';
                 piece.style.backgroundImage = `url(${imageSrc})`;
                 piece.style.backgroundPosition = `-${(i % gridSize) * pieceSize}px -${Math.floor(i / gridSize) * pieceSize}px`;
                 piece.dataset.index = i;
-                piece.addEventListener('click', movePiece);
-                piece.addEventListener('touchstart', movePiece); // For better mobile touch
+                piece.draggable = true;
+                piece.addEventListener('dragstart', dragStart);
+                piece.addEventListener('dragend', dragEnd);
+                container.addEventListener('dragover', dragOver);
+                container.addEventListener('drop', drop);
                 container.appendChild(piece);
                 pieces.push(piece);
+                correctPositions.push({ x: (i % gridSize) * pieceSize, y: Math.floor(i / gridSize) * pieceSize });
             }
-            // Add empty space
-            pieces.push(null);
             shufflePuzzle();
         }
 
         // Shuffle the puzzle
         function shufflePuzzle() {
-            // Simple shuffle: randomize positions
-            for (let i = pieces.length - 2; i > 0; i--) {
+            // Randomize positions
+            for (let i = pieces.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
             }
@@ -154,49 +163,68 @@
         // Update piece positions
         function updatePositions() {
             for (let i = 0; i < pieces.length; i++) {
-                if (pieces[i]) {
-                    const x = i % gridSize;
-                    const y = Math.floor(i / gridSize);
-                    pieces[i].style.left = `${x * pieceSize}px`;
-                    pieces[i].style.top = `${y * pieceSize}px`;
-                }
+                const x = (i % gridSize) * pieceSize;
+                const y = Math.floor(i / gridSize) * pieceSize;
+                pieces[i].style.left = `${x}px`;
+                pieces[i].style.top = `${y}px`;
             }
-            emptyPos = { x: pieces.indexOf(null) % gridSize, y: Math.floor(pieces.indexOf(null) / gridSize) };
         }
 
-        // Move piece if adjacent to empty
-        function movePiece(e) {
-            e.preventDefault(); // Prevent default touch behavior
-            const piece = e.target;
-            const index = parseInt(piece.dataset.index);
-            const x = index % gridSize;
-            const y = Math.floor(index / gridSize);
-            const dx = Math.abs(x - emptyPos.x);
-            const dy = Math.abs(y - emptyPos.y);
-            if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
-                // Swap with empty
-                const emptyIndex = emptyPos.y * gridSize + emptyPos.x;
-                [pieces[index], pieces[emptyIndex]] = [pieces[emptyIndex], pieces[index]];
-                updatePositions();
+        // Drag and drop handlers
+        let draggedPiece = null;
+
+        function dragStart(e) {
+            draggedPiece = e.target;
+            e.target.classList.add('dragging');
+        }
+
+        function dragEnd(e) {
+            e.target.classList.remove('dragging');
+        }
+
+        function dragOver(e) {
+            e.preventDefault();
+        }
+
+        function drop(e) {
+            e.preventDefault();
+            if (draggedPiece) {
+                const rect = container.getBoundingClientRect();
+                const x = e.clientX - rect.left - pieceSize / 2;
+                const y = e.clientY - rect.top - pieceSize / 2;
+                // Snap to grid
+                const gridX = Math.round(x / pieceSize) * pieceSize;
+                const gridY = Math.round(y / pieceSize) * pieceSize;
+                draggedPiece.style.left = `${Math.max(0, Math.min(gridX, (gridSize - 1) * pieceSize))}px`;
+                draggedPiece.style.top = `${Math.max(0, Math.min(gridY, (gridSize - 1) * pieceSize))}px`;
                 checkWin();
             }
         }
 
         // Check if puzzle is solved
         function checkWin() {
-            for (let i = 0; i < pieces.length - 1; i++) {
-                if (pieces[i] && parseInt(pieces[i].dataset.index) !== i) {
-                    return;
+            let solved = true;
+            for (let i = 0; i < pieces.length; i++) {
+                const piece = pieces[i];
+                const index = parseInt(piece.dataset.index);
+                const expectedX = correctPositions[index].x;
+                const expectedY = correctPositions[index].y;
+                const currentX = parseFloat(piece.style.left || 0);
+                const currentY = parseFloat(piece.style.top || 0);
+                if (Math.abs(currentX - expectedX) > 10 || Math.abs(currentY - expectedY) > 10) {
+                    solved = false;
+                    break;
                 }
             }
-            // Puzzle solved!
-            message.style.display = 'block';
-            audio.play();
+            if (solved) {
+                message.style.display = 'block';
+                audio.play();
+            }
         }
 
         // Event listeners
         shuffleBtn.addEventListener('click', shufflePuzzle);
-        window.addEventListener('resize', adjustForMobile); // Adjust on window resize
+        window.addEventListener('resize', adjustForMobile);
 
         // Initialize
         createPuzzle();
