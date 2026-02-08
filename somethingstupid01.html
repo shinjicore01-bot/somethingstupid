@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proposal Puzzle</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #ffe6f2;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #d63384;
+            font-size: 1.5em;
+        }
+        p {
+            font-size: 1em;
+        }
+        #puzzle-container {
+            display: inline-block;
+            position: relative;
+            width: 400px;
+            height: 400px;
+            border: 2px solid #d63384;
+            margin: 20px auto;
+        }
+        .puzzle-piece {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            background-size: 400px 400px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none; /* Prevent text selection on mobile */
+        }
+        .puzzle-piece:hover {
+            opacity: 0.8;
+        }
+        #message {
+            display: none;
+            font-size: 24px;
+            color: #d63384;
+            margin-top: 20px;
+        }
+        #audio {
+            display: none;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #d63384;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin: 10px;
+            font-size: 1em;
+        }
+        button:hover {
+            background-color: #b02a6b;
+        }
+        /* Mobile responsiveness */
+        @media (max-width: 600px) {
+            #puzzle-container {
+                width: 300px;
+                height: 300px;
+            }
+            .puzzle-piece {
+                width: 75px;
+                height: 75px;
+            }
+            h1 {
+                font-size: 1.2em;
+            }
+            #message {
+                font-size: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Will You Solve This Puzzle for a Special Message?</h1>
+    <p>Tap on a tile next to the empty space to move it. Solve the puzzle to reveal the proposal!</p>
+    <div id="puzzle-container"></div>
+    <button id="shuffle-btn">Shuffle Puzzle</button>
+    <div id="message">Will you be my forever valentine, Bean?</div>
+    <audio id="audio" controls loop>
+        <!-- Replace 'your-song.mp3' with the path to your song file. For example, use a public domain song or upload your own. -->
+        <source src="your-song.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+
+    <script>
+        const container = document.getElementById('puzzle-container');
+        const message = document.getElementById('message');
+        const audio = document.getElementById('audio');
+        const shuffleBtn = document.getElementById('shuffle-btn');
+
+        // Replace 'your-image.jpg' with the path to your provided picture.
+        const imageSrc = 'your-image.jpg'; // e.g., 'path/to/your/photo.jpg'
+
+        const gridSize = 4; // 4x4 grid
+        let pieceSize = 100; // Will be adjusted for mobile
+        let pieces = [];
+        let emptyPos = { x: 3, y: 3 }; // Bottom-right empty
+
+        // Adjust for mobile
+        function adjustForMobile() {
+            if (window.innerWidth <= 600) {
+                pieceSize = 75;
+                container.style.width = '300px';
+                container.style.height = '300px';
+            } else {
+                pieceSize = 100;
+                container.style.width = '400px';
+                container.style.height = '400px';
+            }
+        }
+
+        // Create puzzle pieces
+        function createPuzzle() {
+            adjustForMobile();
+            container.innerHTML = '';
+            pieces = [];
+            for (let i = 0; i < gridSize * gridSize - 1; i++) {
+                const piece = document.createElement('div');
+                piece.className = 'puzzle-piece';
+                piece.style.backgroundImage = `url(${imageSrc})`;
+                piece.style.backgroundPosition = `-${(i % gridSize) * pieceSize}px -${Math.floor(i / gridSize) * pieceSize}px`;
+                piece.dataset.index = i;
+                piece.addEventListener('click', movePiece);
+                piece.addEventListener('touchstart', movePiece); // For better mobile touch
+                container.appendChild(piece);
+                pieces.push(piece);
+            }
+            // Add empty space
+            pieces.push(null);
+            shufflePuzzle();
+        }
+
+        // Shuffle the puzzle
+        function shufflePuzzle() {
+            // Simple shuffle: randomize positions
+            for (let i = pieces.length - 2; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
+            }
+            updatePositions();
+            message.style.display = 'none';
+            audio.pause();
+        }
+
+        // Update piece positions
+        function updatePositions() {
+            for (let i = 0; i < pieces.length; i++) {
+                if (pieces[i]) {
+                    const x = i % gridSize;
+                    const y = Math.floor(i / gridSize);
+                    pieces[i].style.left = `${x * pieceSize}px`;
+                    pieces[i].style.top = `${y * pieceSize}px`;
+                }
+            }
+            emptyPos = { x: pieces.indexOf(null) % gridSize, y: Math.floor(pieces.indexOf(null) / gridSize) };
+        }
+
+        // Move piece if adjacent to empty
+        function movePiece(e) {
+            e.preventDefault(); // Prevent default touch behavior
+            const piece = e.target;
+            const index = parseInt(piece.dataset.index);
+            const x = index % gridSize;
+            const y = Math.floor(index / gridSize);
+            const dx = Math.abs(x - emptyPos.x);
+            const dy = Math.abs(y - emptyPos.y);
+            if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+                // Swap with empty
+                const emptyIndex = emptyPos.y * gridSize + emptyPos.x;
+                [pieces[index], pieces[emptyIndex]] = [pieces[emptyIndex], pieces[index]];
+                updatePositions();
+                checkWin();
+            }
+        }
+
+        // Check if puzzle is solved
+        function checkWin() {
+            for (let i = 0; i < pieces.length - 1; i++) {
+                if (pieces[i] && parseInt(pieces[i].dataset.index) !== i) {
+                    return;
+                }
+            }
+            // Puzzle solved!
+            message.style.display = 'block';
+            audio.play();
+        }
+
+        // Event listeners
+        shuffleBtn.addEventListener('click', shufflePuzzle);
+        window.addEventListener('resize', adjustForMobile); // Adjust on window resize
+
+        // Initialize
+        createPuzzle();
+    </script>
+</body>
+</html>
