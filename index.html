@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Proposal Jigsaw Puzzle</title>
+    <title>Proposal Puzzle</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -44,6 +44,10 @@
         .puzzle-piece.dragging {
             opacity: 0.5;
             z-index: 10;
+        }
+        .empty {
+            background-color: #f0f0f0; /* Light gray for the blank space */
+            border: 1px dashed #ccc;
         }
         #message {
             display: none;
@@ -87,7 +91,7 @@
 </head>
 <body>
     <h1>Will You Solve This Puzzle for a Special Message?</h1>
-    <p>Drag the pieces to their correct positions to complete the puzzle and reveal the proposal!</p>
+    <p>Drag a piece next to the blank space and drop it there to move. Solve the puzzle to reveal the proposal!</p>
     <div id="puzzle-container"></div>
     <button id="shuffle-btn">Shuffle Puzzle</button>
     <div id="message">Will you be my forever valentine, Bean?</div>
@@ -109,7 +113,7 @@
         const gridSize = 3; // 3x3 grid for easier solving
         let pieceSize = 100; // Will be adjusted for mobile
         let pieces = [];
-        let correctPositions = [];
+        let emptyIndex = 8; // Position of the empty space (bottom-right in 3x3)
 
         // Adjust for mobile
         function adjustForMobile() {
@@ -129,12 +133,15 @@
             adjustForMobile();
             container.innerHTML = '';
             pieces = [];
-            correctPositions = [];
             for (let i = 0; i < gridSize * gridSize; i++) {
                 const piece = document.createElement('div');
                 piece.className = 'puzzle-piece';
-                piece.style.backgroundImage = `url(${imageSrc})`;
-                piece.style.backgroundPosition = `-${(i % gridSize) * pieceSize}px -${Math.floor(i / gridSize) * pieceSize}px`;
+                if (i !== emptyIndex) {
+                    piece.style.backgroundImage = `url(${imageSrc})`;
+                    piece.style.backgroundPosition = `-${(i % gridSize) * pieceSize}px -${Math.floor(i / gridSize) * pieceSize}px`;
+                } else {
+                    piece.classList.add('empty');
+                }
                 piece.dataset.index = i;
                 piece.draggable = true;
                 piece.addEventListener('dragstart', dragStart);
@@ -143,21 +150,34 @@
                 container.addEventListener('drop', drop);
                 container.appendChild(piece);
                 pieces.push(piece);
-                correctPositions.push({ x: (i % gridSize) * pieceSize, y: Math.floor(i / gridSize) * pieceSize });
             }
             shufflePuzzle();
         }
 
         // Shuffle the puzzle
         function shufflePuzzle() {
-            // Randomize positions
-            for (let i = pieces.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
-            }
-            updatePositions();
+            // Randomize positions (ensure solvable)
+            do {
+                for (let i = pieces.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
+                }
+                updatePositions();
+            } while (!isSolvable());
             message.style.display = 'none';
             audio.pause();
+        }
+
+        // Check if the puzzle is solvable (for sliding puzzles)
+        function isSolvable() {
+            let inversions = 0;
+            const order = pieces.map(p => parseInt(p.dataset.index)).filter(i => i !== emptyIndex);
+            for (let i = 0; i < order.length; i++) {
+                for (let j = i + 1; j < order.length; j++) {
+                    if (order[i] > order[j]) inversions++;
+                }
+            }
+            return inversions % 2 === 0;
         }
 
         // Update piece positions
@@ -167,7 +187,9 @@
                 const y = Math.floor(i / gridSize) * pieceSize;
                 pieces[i].style.left = `${x}px`;
                 pieces[i].style.top = `${y}px`;
+                pieces[i].dataset.currentIndex = i;
             }
+            emptyIndex = pieces.findIndex(p => p.classList.contains('empty'));
         }
 
         // Drag and drop handlers
@@ -188,38 +210,31 @@
 
         function drop(e) {
             e.preventDefault();
-            if (draggedPiece) {
-                const rect = container.getBoundingClientRect();
-                const x = e.clientX - rect.left - pieceSize / 2;
-                const y = e.clientY - rect.top - pieceSize / 2;
-                // Snap to grid
-                const gridX = Math.round(x / pieceSize) * pieceSize;
-                const gridY = Math.round(y / pieceSize) * pieceSize;
-                draggedPiece.style.left = `${Math.max(0, Math.min(gridX, (gridSize - 1) * pieceSize))}px`;
-                draggedPiece.style.top = `${Math.max(0, Math.min(gridY, (gridSize - 1) * pieceSize))}px`;
-                checkWin();
+            if (draggedPiece && draggedPiece !== e.target) {
+                const draggedIdx = parseInt(draggedPiece.dataset.currentIndex);
+                const targetIdx = parseInt(e.target.dataset.currentIndex);
+                // Only allow swapping with the empty space if adjacent
+                const dx = Math.abs((draggedIdx % gridSize) - (targetIdx % gridSize));
+                const dy = Math.abs(Math.floor(draggedIdx / gridSize) - Math.floor(targetIdx / gridSize));
+                if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+                    // Swap positions
+                    [pieces[draggedIdx], pieces[targetIdx]] = [pieces[targetIdx], pieces[draggedIdx]];
+                    updatePositions();
+                    checkWin();
+                }
             }
         }
 
         // Check if puzzle is solved
         function checkWin() {
-            let solved = true;
             for (let i = 0; i < pieces.length; i++) {
-                const piece = pieces[i];
-                const index = parseInt(piece.dataset.index);
-                const expectedX = correctPositions[index].x;
-                const expectedY = correctPositions[index].y;
-                const currentX = parseFloat(piece.style.left || 0);
-                const currentY = parseFloat(piece.style.top || 0);
-                if (Math.abs(currentX - expectedX) > 10 || Math.abs(currentY - expectedY) > 10) {
-                    solved = false;
-                    break;
+                if (parseInt(pieces[i].dataset.index) !== i) {
+                    return;
                 }
             }
-            if (solved) {
-                message.style.display = 'block';
-                audio.play();
-            }
+            // Puzzle solved!
+            message.style.display = 'block';
+            audio.play();
         }
 
         // Event listeners
